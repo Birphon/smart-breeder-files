@@ -4,7 +4,10 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import os
 import threading
+import json
 
+REPO_PATH = 'https://github.com/Birphon/smart-breeder-files.git'
+CONFIG_FILE = 'config.json'
 
 class GitFolderWatcher(FileSystemEventHandler):
     def __init__(self, repo_path, local_path):
@@ -40,30 +43,44 @@ def set_downloads_folder():
             folder_path = values['folder_path']
             if folder_path:
                 window.close()
+                save_config(folder_path)
                 return folder_path
 
     window.close()
     return None
 
+def save_config(folder_path):
+    with open(CONFIG_FILE, 'w') as config_file:
+        json.dump({'downloads_folder': folder_path}, config_file)
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'r') as config_file:
+            config = json.load(config_file)
+            return config.get('downloads_folder', None)
+    return None
+
 def main():
-    repo_path = 'https://github.com/Birphon/smart-breeder-files.git'
-    
-    # Set the initial downloads folder via GUI
-    downloads_folder = set_downloads_folder()
-    if not downloads_folder:
-        print("Downloads folder not selected. Exiting.")
-        return
+    # Try loading the last used folder from the config
+    last_used_folder = load_config()
+
+    # If the folder is not found or new-folder command is provided, set the downloads folder via GUI
+    if not last_used_folder or (len(os.sys.argv) > 1 and os.sys.argv[1] == 'new-folder'):
+        last_used_folder = set_downloads_folder()
+        if not last_used_folder:
+            print("Downloads folder not selected. Exiting.")
+            return
 
     # Initialize Git folder watcher
-    watcher = GitFolderWatcher(repo_path, downloads_folder)
+    watcher = GitFolderWatcher(REPO_PATH, last_used_folder)
 
     # Start the watchdog observer in a separate thread
     observer = Observer()
-    observer.schedule(watcher, downloads_folder, recursive=True)
+    observer.schedule(watcher, last_used_folder, recursive=True)
     observer.start()
 
     try:
-        print(f"Watching for changes in {downloads_folder}. Press Ctrl+C to exit.")
+        print(f"Watching for changes in {last_used_folder}. Press Ctrl+C to exit.")
         observer.join()
     except KeyboardInterrupt:
         observer.stop()
@@ -71,4 +88,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
